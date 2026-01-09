@@ -1,0 +1,6 @@
+CompileFlags:
+  Add:
+    - -I/home/martin/code/esphome
+    - -I/home/martin/code/esphome/esphome/core
+    - -std=c++17
+    - -Wno-unknown-pragmas

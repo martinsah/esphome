@@ -1,0 +1,63 @@
+esphome:
+  name: pioneer-ac-controller
+
+esp8266:
+  board: esp8285   # adjust to your board
+
+# If pd_pioneer_ir is an external component (not built into ESPHome),
+# uncomment and configure this section:
+# external_components:
+#   - source:
+#       type: git
+#       url: https://github.com/your-repo/esphome-components
+#       ref: main
+#     components: [pd_pioneer_ir]
+
+# WiFi configuration
+wifi:
+  ssid: "penny"
+  password: "snoroway"
+  # Enable fallback hotspot if WiFi connection fails
+  ap:
+    ssid: "Pioneer AC"
+    password: "snoroway"
+  power_save_mode: none
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API (optional)
+api:
+  encryption:
+    key: "EuxRnvU23wc5JOCpO31syGKN2ZMX1OkwmevRI4GApdU="
+
+# OTA updates (optional)
+ota:
+  - platform: esphome
+    password: "df18173edf61f007146c40a0e21ef3cc"
+
+# Remote transmitter for IR output
+remote_transmitter:
+  pin: GPIO4  # Change to your IR LED pin
+  carrier_duty_percent: 50%
+  id: tx_ir
+
+# Optional: Remote receiver for IR input (to learn commands from remote)
+remote_receiver:
+  pin:
+    number: GPIO14
+    inverted: true
+  dump: all
+  id: rx_ir
+
+# PD Pioneer IR Climate Control
+climate:
+  - platform: pd_pioneer_ir
+    name: "Pioneer AC"
+    transmitter_id: tx_ir  # References the remote_transmitter above
+    receiver_id: rx_ir       # Optional: only if you want to receive IR commands
+    use_fahrenheit: false               # Set to true if you want Fahrenheit instead of Celsius
+    # Optional: temperature sensor
+    # sensor: temperature_sensor
+    # Optional: humidity sensor
+    # humidity_sensor: humidity_sensor
