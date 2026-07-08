@@ -18,9 +18,10 @@ from esphome.const import (
     CONF_ROTATION,
     CONF_UPDATE_INTERVAL,
 )
-from esphome.core import ID
+from esphome.core import ID, EnumValue
 from esphome.cpp_generator import MockObj, TemplateArgsType
 import esphome.final_validate as fv
+from esphome.helpers import add_class_to_obj
 from esphome.types import ConfigType
 
 from . import boards, hub75_ns
@@ -120,12 +121,32 @@ PANEL_LAYOUTS = {
 }
 
 Hub75ScanWiring = cg.global_ns.enum("Hub75ScanWiring", is_class=True)
-SCAN_PATTERNS = {
+SCAN_WIRINGS = {
     "STANDARD_TWO_SCAN": Hub75ScanWiring.STANDARD_TWO_SCAN,
-    "FOUR_SCAN_16PX_HIGH": Hub75ScanWiring.FOUR_SCAN_16PX_HIGH,
-    "FOUR_SCAN_32PX_HIGH": Hub75ScanWiring.FOUR_SCAN_32PX_HIGH,
-    "FOUR_SCAN_64PX_HIGH": Hub75ScanWiring.FOUR_SCAN_64PX_HIGH,
+    "SCAN_1_4_16PX_HIGH": Hub75ScanWiring.SCAN_1_4_16PX_HIGH,
+    "SCAN_1_8_32PX_HIGH": Hub75ScanWiring.SCAN_1_8_32PX_HIGH,
+    "SCAN_1_8_32PX_FULL": Hub75ScanWiring.SCAN_1_8_32PX_FULL,
+    "SCAN_1_8_40PX_HIGH": Hub75ScanWiring.SCAN_1_8_40PX_HIGH,
+    "SCAN_1_8_64PX_HIGH": Hub75ScanWiring.SCAN_1_8_64PX_HIGH,
 }
+
+
+def _validate_scan_wiring(value):
+    """Validate scan_wiring against the allowed names."""
+    value = cv.string(value).upper().replace(" ", "_")
+
+    # Validate against allowed values
+    if value not in SCAN_WIRINGS:
+        raise cv.Invalid(
+            f"Unknown scan wiring '{value}'. "
+            f"Valid options are: {', '.join(sorted(SCAN_WIRINGS.keys()))}"
+        )
+
+    # Return as EnumValue like cv.enum does
+    result = add_class_to_obj(value, EnumValue)
+    result.enum_value = SCAN_WIRINGS[value]
+    return result
+
 
 Hub75ClockSpeed = cg.global_ns.enum("Hub75ClockSpeed", is_class=True)
 CLOCK_SPEEDS = {
@@ -382,9 +403,7 @@ CONFIG_SCHEMA = cv.All(
             cv.Optional(CONF_LAYOUT_COLS): cv.positive_int,
             cv.Optional(CONF_LAYOUT): cv.enum(PANEL_LAYOUTS, upper=True, space="_"),
             # Panel hardware configuration
-            cv.Optional(CONF_SCAN_WIRING): cv.enum(
-                SCAN_PATTERNS, upper=True, space="_"
-            ),
+            cv.Optional(CONF_SCAN_WIRING): _validate_scan_wiring,
             cv.Optional(CONF_SHIFT_DRIVER): cv.enum(SHIFT_DRIVERS, upper=True),
             # Display configuration
             cv.Optional(CONF_DOUBLE_BUFFER): cv.boolean,
@@ -547,7 +566,7 @@ def _build_config_struct(
 async def to_code(config: ConfigType) -> None:
     add_idf_component(
         name="esphome/esp-hub75",
-        ref="0.2.2",
+        ref="0.3.5",
     )
 
     # Set compile-time configuration via build flags (so external library sees them)
@@ -612,6 +631,7 @@ async def to_code(config: ConfigType) -> None:
         },
         key=CONF_BRIGHTNESS,
     ),
+    synchronous=True,
 )
 async def hub75_set_brightness_to_code(
     config: ConfigType,
