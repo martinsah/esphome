@@ -16,6 +16,7 @@ class PDPioneerIR : public climate_ir::ClimateIR {
                               {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_ECO}) {}
 
   void control(const climate::ClimateCall &call) override;
+  void setup() override;
 
   void set_fahrenheit(bool value) {
     this->fahrenheit_ = value;

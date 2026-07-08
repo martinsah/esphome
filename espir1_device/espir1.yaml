@@ -42,7 +42,12 @@ remote_transmitter:
 
 climate:
   - platform: pd_pioneer_ir
+    id: pioneer_ac
     name: "Pioneer AC"
     transmitter_id: tx_ir
     receiver_id: rcvr
     use_fahrenheit: true
+    visual:
+      min_temperature: 61 °F
+      max_temperature: 88 °F
+      temperature_step: 0.5 °F

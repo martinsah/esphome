@@ -6,6 +6,11 @@ namespace pd_pioneer_ir {
 
 static const char *const TAG = "pd_pioneer_ir.climate";
 
+void PDPioneerIR::setup() {
+  climate_ir::ClimateIR::setup();
+  this->publish_state();
+}
+
 void PDPioneerIR::control(const climate::ClimateCall &call) {
   if (call.get_mode() == climate::CLIMATE_MODE_OFF) {
     this->swing_mode = climate::CLIMATE_SWING_OFF;
