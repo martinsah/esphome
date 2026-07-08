@@ -13,19 +13,19 @@ matching the decode tooling). Both bursts carry a 14-byte frame (13 data bytes +
 |----------|-------|
 | Carrier frequency | 38 kHz |
 | Bit order | LSB first within each byte |
-| Framing | 1 start bit + 104 data bits + 1 stop bit |
+| Framing | header + 112 data bits (14 bytes) + footer (no start/stop bits) |
 | Word size | 8 bits |
-| Header | ~3143 µs mark, ~1591 µs space |
-| Bit mark | ~513 µs |
-| Bit 1 space | ~1065 µs |
-| Bit 0 space | ~302 µs |
-| Footer | ~513 µs mark, ~10126 µs space |
+| Header | ~3120 µs mark, ~1560 µs space (Pronto `0078`/`003C`) |
+| Bit mark | ~520 µs (Pronto `0014`) |
+| Bit 1 space | ~1066 µs (Pronto `0029`) |
+| Bit 0 space | ~312 µs (Pronto `000C`) |
+| Footer | ~520 µs mark, ~10010 µs space (Pronto `0014`/`0181`) |
 
 Decode captured Pronto logs with:
 
 ```bash
 cd /path/to/pronto_decoder
-python3 test_parse_log.py --start-bits 1 --stop-bits 1 --show-checksum < capture.log
+python3 test_parse_log.py --start-bits 0 --stop-bits 0 --show-checksum < capture.log
 ```
 
 ## Frame Layout
@@ -82,37 +82,26 @@ Confirmed from mode-cycle captures:
 
 ## Temperature (even byte 7, byte 12)
 
-Temperature is encoded in **Fahrenheit** on the wire regardless of the unit display
-setting. ESPHome stores target temperature in Celsius internally; convert before encoding.
-
-### Whole degrees (byte 7)
-
-Reference point: **76 °F → `0x07`**. Each step of byte 7 covers 2 °F:
+Encoding is based on **Celsius**, not Fahrenheit. From
+`pronto_decoder/temperature_decoding_spreadsheet.ods`:
 
 ```
-byte[7] = 0x07 + (76 - temp_F) // 2
+code = 31.75 - temp_C
+byte[7]  = floor(code)
+byte[12] = 0x80 | (frac(code) < 0.5 ? 0x04 : 0x00)
 ```
 
-| temp_F | byte 7 |
-|--------|--------|
-| 76, 75 | `0x07` |
-| 74, 73 | `0x08` |
-| 72 | `0x09` |
-| 71, 70 | `0x0A` |
-| 69, 68 | `0x0B` |
+ESPHome stores target temperature in Celsius internally, so no °F conversion is needed
+for encoding. Valid range observed: 16–31 °C (61–88 °F).
 
-Valid range observed: 61–88 °F (16–31 °C).
-
-### Half degrees (byte 12)
-
-Byte 12 base value is `0x80`. Bit 2 toggles for half-degree steps:
-
-| Fractional °F | byte 12 |
-|---------------|---------|
-| `.5` (e.g. 75.5) | `0x80` |
-| `.0` (e.g. 76.0) | `0x84` |
-
-Rule: `byte[12] = 0x80 | (integer_part_F % 2 == 0 ? 0x04 : 0x00)`
+| °F | °C (approx) | byte 7 | byte 12 |
+|----|-------------|--------|---------|
+| 88 | 31.11 | `0x00` | `0x80` |
+| 76 | 24.44 | `0x07` | `0x84` |
+| 73 | 22.78 | `0x08` | `0x80` |
+| 72 | 22.22 | `0x09` | `0x80` |
+| 71 | 21.67 | `0x0A` | `0x84` |
+| 68 | 20.00 | `0x0B` | `0x80` |
 
 Heat mode may use `0x88`/`0x8C` instead of `0x80`/`0x84`; treat as mode-specific
 variants of the same half-degree bit.
@@ -193,7 +182,7 @@ Pronto hex log
   → timing_histogram()        bucket pulse widths
   → reduce_histogram(10%)     merge similar timings (~10% tolerance)
   → meanify_messages()        normalize each pulse to canonical width
-  → convert_to_binary(1, 1)   mark<space → 1, else 0; skip start/stop bit
+  → convert_to_binary(0, 0)   mark<space → 1, else 0; no start/stop bits to skip
   → convert_to_hex(lsbfirst=8)  group into bytes, verify checksum
 ```
 

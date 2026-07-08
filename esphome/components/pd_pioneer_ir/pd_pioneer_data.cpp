@@ -29,12 +29,14 @@ bool ControlData::get_power_() const { return this->even_[5] != PWR_OFF; }
 
 void ControlData::set_temp(float temp_c, bool fahrenheit) {
   (void) fahrenheit;
-  float temp_f = celsius_to_fahrenheit(temp_c);
-  temp_f = clamp(temp_f, static_cast<float>(PDPIONEER_TEMPF_MIN), static_cast<float>(PDPIONEER_TEMPF_MAX));
-
-  int temp_whole = static_cast<int>(std::floor(temp_f + 0.001f));
-  this->even_[7] = static_cast<uint8_t>(0x07 + (76 - temp_whole) / 2);
-  this->even_[12] = static_cast<uint8_t>(0x80 | ((temp_whole % 2 == 0) ? 0x04 : 0x00));
+  // Protocol encodes temperature as code = 31.75 - °C (see temperature_decoding_spreadsheet.ods).
+  // even_[7] = floor(code); even_[12] bit 2 set when fractional part of code is < 0.5.
+  temp_c = clamp(temp_c, static_cast<float>(PDPIONEER_TEMPC_MIN), static_cast<float>(PDPIONEER_TEMPC_MAX));
+  const float code = 31.75f - temp_c;
+  const int whole = static_cast<int>(std::floor(code + 0.001f));
+  const float frac = code - static_cast<float>(whole);
+  this->even_[7] = static_cast<uint8_t>(whole);
+  this->even_[12] = static_cast<uint8_t>(0x80 | ((frac < 0.5f) ? 0x04 : 0x00));
 }
 
 float ControlData::get_temp(bool fahrenheit) const {
@@ -42,9 +44,8 @@ float ControlData::get_temp(bool fahrenheit) const {
   if (!this->get_power_())
     return fahrenheit_to_celsius(72.0f);
 
-  int pair_top = 76 - 2 * (static_cast<int>(this->even_[7]) - 0x07);
-  float temp_f = static_cast<float>((this->even_[12] & 0x04) ? pair_top : pair_top - 1);
-  return fahrenheit_to_celsius(temp_f);
+  const float code = static_cast<float>(this->even_[7]) + ((this->even_[12] & 0x04) ? 0.0f : 0.5f);
+  return 31.75f - code;
 }
 
 void ControlData::set_mode(ClimateMode mode) {
@@ -146,15 +147,39 @@ ClimateFanMode ControlData::get_fan_mode() const {
   return ClimateFanMode::CLIMATE_FAN_HIGH;
 }
 
-void ControlData::set_swing_vertical(bool enabled) {
-  if (enabled) {
-    this->odd_[7] = 0x08;
-  } else if (this->odd_[7] == 0x08) {
-    this->odd_[7] = 0x00;
+void ControlData::set_swing_mode(climate::ClimateSwingMode mode) {
+  // Clear prior swing encoding, then apply the requested mode.
+  this->odd_[7] = SWING_OFF;
+  this->even_[8] = static_cast<uint8_t>(this->even_[8] & ~SWING_VERTICAL_EVEN_MASK);
+
+  switch (mode) {
+    case climate::CLIMATE_SWING_VERTICAL:
+      this->odd_[7] = SWING_VERTICAL;
+      this->even_[8] = static_cast<uint8_t>(this->even_[8] | SWING_VERTICAL_EVEN_MASK);
+      break;
+    case climate::CLIMATE_SWING_HORIZONTAL:
+      this->odd_[7] = SWING_HORIZONTAL;
+      break;
+    case climate::CLIMATE_SWING_BOTH:
+      this->odd_[7] = static_cast<uint8_t>(SWING_VERTICAL | SWING_HORIZONTAL);
+      this->even_[8] = static_cast<uint8_t>(this->even_[8] | SWING_VERTICAL_EVEN_MASK);
+      break;
+    case climate::CLIMATE_SWING_OFF:
+    default:
+      break;
   }
 }
 
-bool ControlData::get_swing_vertical() const { return this->odd_[7] == 0x08; }
+climate::ClimateSwingMode ControlData::get_swing_mode() const {
+  const uint8_t swing = this->odd_[7];
+  if (swing == (SWING_VERTICAL | SWING_HORIZONTAL))
+    return climate::CLIMATE_SWING_BOTH;
+  if (swing == SWING_VERTICAL)
+    return climate::CLIMATE_SWING_VERTICAL;
+  if (swing == SWING_HORIZONTAL)
+    return climate::CLIMATE_SWING_HORIZONTAL;
+  return climate::CLIMATE_SWING_OFF;
+}
 
 void ControlData::set_eco(bool enabled) {
   if (enabled) {

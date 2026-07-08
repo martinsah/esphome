@@ -1,6 +1,6 @@
 #pragma once
 
-#include "pd_pioneer_protocol.h"
+#include "esphome/components/remote_base/pd_pioneer_protocol.h"
 #include "esphome/components/climate/climate_mode.h"
 
 namespace esphome {
@@ -28,8 +28,8 @@ class ControlData {
   void set_fan_mode(ClimateFanMode mode);
   ClimateFanMode get_fan_mode() const;
 
-  void set_swing_vertical(bool enabled);
-  bool get_swing_vertical() const;
+  void set_swing_mode(climate::ClimateSwingMode mode);
+  climate::ClimateSwingMode get_swing_mode() const;
 
   void set_eco(bool enabled);
   bool get_eco() const;
@@ -52,6 +52,12 @@ class ControlData {
 
   static const uint8_t PWR_ON = 0x24;
   static const uint8_t PWR_OFF = 0xA0;
+
+  static const uint8_t SWING_OFF = 0x00;
+  static const uint8_t SWING_VERTICAL = 0x08;
+  static const uint8_t SWING_HORIZONTAL = 0x90;
+  /// Vertical swing also sets this mask on even byte 8 (fan sub-code).
+  static const uint8_t SWING_VERTICAL_EVEN_MASK = 0x38;
 
   void set_power_(bool on);
   bool get_power_() const;

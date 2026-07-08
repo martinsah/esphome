@@ -5,10 +5,9 @@
 
 #include "esphome/core/component.h"
 #include "esphome/core/helpers.h"
-#include "esphome/components/remote_base/remote_base.h"
+#include "remote_base.h"
 
-namespace esphome {
-namespace remote_base {
+namespace esphome::remote_base {
 
 class PDPioneerData {
  public:
@@ -47,7 +46,15 @@ class PDPioneerData {
     }
   }
 
-  std::string to_string() const { return format_hex_pretty(this->data_.data(), this->data_.size()); }
+  /// Buffer size for to_str(): 14 bytes = "AA.BB....NN\0"
+  static constexpr size_t TO_STR_BUFFER_SIZE = format_hex_pretty_size(FRAME_SIZE);
+  /// Format to buffer, returns pointer to buffer
+  const char *to_str(char *buffer) const {
+    format_hex_pretty_to(buffer, TO_STR_BUFFER_SIZE, this->data_.data(), this->data_.size(), '.');
+    return buffer;
+  }
+
+  bool operator==(const PDPioneerData &rhs) const { return this->data_ == rhs.data_; }
 
   uint8_t &operator[](size_t idx) { return this->data_[idx]; }
   const uint8_t &operator[](size_t idx) const { return this->data_[idx]; }
@@ -82,5 +89,4 @@ template<typename... Ts> class PDPioneerAction : public RemoteTransmitterActionB
   }
 };
 
-}  // namespace remote_base
-}  // namespace esphome
+}  // namespace esphome::remote_base
