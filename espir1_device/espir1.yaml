@@ -1,0 +1,48 @@
+esphome:
+  name: espir
+  friendly_name: ESPIR1
+
+external_components:
+  - source: github://martinsah/esphome@pd-pioneer-ir-component
+    components: [pd_pioneer_ir]
+
+esp8266:
+  board: esp8285
+
+logger:
+
+api:
+  encryption:
+    key: "EuxRnvU23wc5JOCpO31syGKN2ZMX1OkwmevRI4GApdU="
+
+ota:
+  - platform: esphome
+    password: "df18173edf61f007146c40a0e21ef3cc"
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "Espir Fallback Hotspot"
+    password: "4ysz2isFGoxC"
+
+captive_portal:
+
+remote_receiver:
+  id: rcvr
+  pin:
+    number: GPIO14
+    inverted: true
+  dump: all
+
+remote_transmitter:
+  id: tx_ir
+  pin: GPIO4
+  carrier_duty_percent: 50%
+
+climate:
+  - platform: pd_pioneer_ir
+    name: "Pioneer AC"
+    transmitter_id: tx_ir
+    receiver_id: rcvr
+    use_fahrenheit: true

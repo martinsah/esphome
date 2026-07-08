@@ -6,41 +6,33 @@
 namespace esphome {
 namespace pd_pioneer_ir {
 
-// Temperature
-const uint8_t PDPIONEER_TEMPC_MIN = 17;  // Celsius
-const uint8_t PDPIONEER_TEMPC_MAX = 30;  // Celsius
-const uint8_t PDPIONEER_TEMPF_MIN = 62;  // Fahrenheit
-const uint8_t PDPIONEER_TEMPF_MAX = 86;  // Fahrenheit
-
 class PDPioneerIR : public climate_ir::ClimateIR {
  public:
   PDPioneerIR()
-      : climate_ir::ClimateIR(
-            PDPIONEER_TEMPC_MIN, PDPIONEER_TEMPC_MAX, 1.0f, true, true,
-            {climate::CLIMATE_FAN_AUTO, climate::CLIMATE_FAN_LOW, climate::CLIMATE_FAN_MEDIUM,
-             climate::CLIMATE_FAN_HIGH},
-            {climate::CLIMATE_SWING_OFF, climate::CLIMATE_SWING_VERTICAL},
-            {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_SLEEP, climate::CLIMATE_PRESET_BOOST}) {}
+      : climate_ir::ClimateIR(PDPIONEER_TEMPC_MIN, PDPIONEER_TEMPC_MAX, 1.0f, true, true,
+                              {climate::CLIMATE_FAN_AUTO, climate::CLIMATE_FAN_LOW, climate::CLIMATE_FAN_MEDIUM,
+                               climate::CLIMATE_FAN_HIGH},
+                              {climate::CLIMATE_SWING_OFF, climate::CLIMATE_SWING_VERTICAL},
+                              {climate::CLIMATE_PRESET_NONE, climate::CLIMATE_PRESET_ECO}) {}
 
-  /// Override control to change settings of the climate device.
   void control(const climate::ClimateCall &call) override;
 
-  /// Set use of Fahrenheit units
   void set_fahrenheit(bool value) {
     this->fahrenheit_ = value;
     this->temperature_step_ = value ? 0.5f : 1.0f;
   }
 
  protected:
-  /// Transmit via IR the state of this climate controller.
   void transmit_state() override;
-  void transmit_(PDPioneerData &data);
-  /// Handle received IR Buffer
+  void transmit_pair_(const ControlData &data);
   bool on_receive(remote_base::RemoteReceiveData data) override;
-  bool on_pdpioneer_(const PDPioneerData &data);
+  bool apply_frame_(const remote_base::PDPioneerData &frame);
+
   bool fahrenheit_{false};
   bool swing_{false};
-  bool boost_{false};
+  bool eco_{false};
+  ControlData rx_state_;
+  bool rx_odd_pending_{false};
 };
 
 }  // namespace pd_pioneer_ir

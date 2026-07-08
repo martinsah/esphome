@@ -1,106 +1,102 @@
 #include "pd_pioneer_protocol.h"
 #include "esphome/core/log.h"
-#include <cinttypes>
 
 namespace esphome {
 namespace remote_base {
 
 static const char *const TAG = "remote.pd_pioneer";
 
-static const int32_t TICK_US = 560;
-static const int32_t HEADER_MARK_US = 3064;
-static const int32_t HEADER_SPACE_US = 1670;
-static const int32_t BIT_MARK_US = 408;
-static const int32_t BIT_ONE_SPACE_US = 1131;
-static const int32_t BIT_ZERO_SPACE_US = 355;
-static const int32_t FOOTER_MARK_US = 408;
-static const int32_t FOOTER_SPACE_US = 9988;
+static const int32_t HEADER_MARK_US = 3143;
+static const int32_t HEADER_SPACE_US = 1591;
+static const int32_t BIT_PULSE_US = 513;
+static const int32_t BIT_ONE_SPACE_US = 1065;
+static const int32_t BIT_ZERO_SPACE_US = 302;
+static const int32_t FOOTER_MARK_US = 513;
+static const int32_t FOOTER_SPACE_US = 10126;
 
-uint8_t PDPioneerData::calc_cs_() const {
-  uint8_t cs = 0;
-  for (uint8_t idx = 0; idx < OFFSET_CS; idx++)
-    cs += this->data_[idx];
-  return cs;
+static void encode_bit_(RemoteTransmitData *dst, bool bit) {
+  dst->item(BIT_PULSE_US, bit ? BIT_ONE_SPACE_US : BIT_ZERO_SPACE_US);
+}
+
+static bool decode_bit_(RemoteReceiveData &src, bool *bit) {
+  if (!src.is_valid(1))
+    return false;
+  int32_t mark = src.peek(0);
+  int32_t space = src.peek(1);
+  src.advance(2);
+  *bit = mark < -space;
+  return true;
 }
 
 void PDPioneerProtocol::encode(RemoteTransmitData *dst, const PDPioneerData &src) {
+  ESP_LOGD(TAG, "encode %s", src.to_string().c_str());
   dst->set_carrier_frequency(38000);
-  dst->reserve(2 + 48 * 2 + 2 + 2 + 48 * 2 + 1);
+  // header + start bit + 14 bytes + stop bit + footer
+  dst->reserve(2 + 2 + PDPioneerData::DATA_LEN * 8 * 2 + 2 + 2);
+
   dst->item(HEADER_MARK_US, HEADER_SPACE_US);
-  for (unsigned idx = 0; idx < 6; idx++) {
-    for (uint8_t mask = 1 << 7; mask; mask >>= 1)
-      dst->item(BIT_MARK_US, (src[idx] & mask) ? BIT_ONE_SPACE_US : BIT_ZERO_SPACE_US);
+  encode_bit_(dst, true);  // start bit
+
+  for (uint8_t idx = 0; idx < PDPioneerData::DATA_LEN; idx++) {
+    for (uint8_t mask = 1; mask; mask <<= 1)
+      encode_bit_(dst, (src[idx] & mask) != 0);
   }
+
+  encode_bit_(dst, true);  // stop bit
   dst->item(FOOTER_MARK_US, FOOTER_SPACE_US);
-  dst->item(HEADER_MARK_US, HEADER_SPACE_US);
-  for (unsigned idx = 0; idx < 6; idx++) {
-    for (uint8_t mask = 1 << 7; mask; mask >>= 1)
-      dst->item(BIT_MARK_US, (src[idx] & mask) ? BIT_ZERO_SPACE_US : BIT_ONE_SPACE_US);
-  }
-  dst->mark(FOOTER_MARK_US);
 }
 
-static bool decode_data(RemoteReceiveData &src, PDPioneerData &dst) {
-  for (unsigned idx = 0; idx < 14; idx++) {
+static bool decode_frame_(RemoteReceiveData &src, PDPioneerData &dst) {
+  bool bit;
+
+  if (!decode_bit_(src, &bit) || !bit)
+    return false;
+
+  for (uint8_t idx = 0; idx < PDPioneerData::DATA_LEN; idx++) {
     uint8_t data = 0;
     for (uint8_t mask = 1; mask; mask <<= 1) {
-      int32_t mark = src.peek(0);
-      src.advance(1);
-      int32_t space = src.peek(0);
-      src.advance(1);
-      if (mark < -space)
+      if (!decode_bit_(src, &bit))
+        return false;
+      if (bit)
         data |= mask;
     }
     dst[idx] = data;
   }
+
+  if (!decode_bit_(src, &bit) || !bit)
+    return false;
+
   return true;
 }
 
 optional<PDPioneerData> PDPioneerProtocol::decode(RemoteReceiveData src) {
   PDPioneerData out;
 
-  // Check header mark and space
-  if (!src.expect_item(HEADER_MARK_US, HEADER_SPACE_US)) {
+  if (!src.expect_item(HEADER_MARK_US, HEADER_SPACE_US))
     return {};
-  }
 
-  // Decode data
-  if (!decode_data(src, out)) {
+  if (!decode_frame_(src, out))
     return {};
-  }
 
-  // Check footer mark
-  if (!src.peek_mark_at_least(FOOTER_MARK_US)) {
-    ESP_LOGI(TAG, "RX PDPioneer decode footer mark error");
+  if (!src.peek_mark_at_least(FOOTER_MARK_US))
     return {};
-  }
   src.advance(1);
 
-  // Check footer space
-  if (!src.peek_space_at_most(-FOOTER_SPACE_US)) {
-    ESP_LOGI(TAG, "RX PDPioneer decode footer space error");
+  if (!src.peek_space_at_most(-FOOTER_SPACE_US))
     return {};
-  }
   src.advance(1);
 
-  // Validate and return
-  if (out.is_valid_odd()) {
-    out.set_type(PDPioneerData::PDPIONEER_TYPE_ODD);
-    ESP_LOGI(TAG, "RX PDPioneer (Odd): %s", out.to_string().c_str());
-    return out;
+  if (!out.is_valid()) {
+    ESP_LOGD(TAG, "checksum fail %s", out.to_string().c_str());
+    return {};
   }
 
-  if (out.is_valid_even()) {
-    out.set_type(PDPioneerData::PDPIONEER_TYPE_EVEN);
-    ESP_LOGI(TAG, "RX PDPioneer (Even): %s", out.to_string().c_str());
-    return out;
-  }
-
-  return {};
+  ESP_LOGI(TAG, "RX %s burst: %s", out.is_odd_burst() ? "odd" : "even", out.to_string().c_str());
+  return out;
 }
 
 void PDPioneerProtocol::dump(const PDPioneerData &data) {
-  ESP_LOGI(TAG, "Received PDPioneer: %s", data.to_string().c_str());
+  ESP_LOGI(TAG, "Received PD-Pioneer: %s", data.to_string().c_str());
 }
 
 }  // namespace remote_base
