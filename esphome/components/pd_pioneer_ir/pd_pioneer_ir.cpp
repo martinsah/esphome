@@ -35,8 +35,8 @@ void PDPioneerIR::transmit_pair_(const ControlData &data) {
   ControlData frame = data;
   frame.finalize();
 
-  ESP_LOGD(TAG, "TX odd:  %s", frame.odd().to_string().c_str());
-  ESP_LOGD(TAG, "TX even: %s", frame.even().to_string().c_str());
+  ESP_LOGI(TAG, "TX odd:  %s", frame.odd().to_string().c_str());
+  ESP_LOGI(TAG, "TX even: %s", frame.even().to_string().c_str());
 
   auto transmit = this->transmitter_->transmit();
   remote_base::PDPioneerProtocol protocol;

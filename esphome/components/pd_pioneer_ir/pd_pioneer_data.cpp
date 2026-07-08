@@ -51,6 +51,13 @@ void ControlData::set_mode(ClimateMode mode) {
   switch (mode) {
     case ClimateMode::CLIMATE_MODE_OFF:
       this->set_power_(false);
+      this->even_[6] = MODE_HEAT;
+      this->even_[7] = 0x0C;
+      this->even_[8] = 0x03;
+      this->even_[12] = 0x80;
+      this->odd_[5] = 0x40;
+      this->odd_[6] = 0x60;
+      this->odd_[7] = 0x00;
       return;
     case ClimateMode::CLIMATE_MODE_COOL:
       this->even_[6] = MODE_COOL;

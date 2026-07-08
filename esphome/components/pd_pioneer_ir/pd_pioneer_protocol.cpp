@@ -37,7 +37,7 @@ void PDPioneerProtocol::encode(RemoteTransmitData *dst, const PDPioneerData &src
   dst->item(HEADER_MARK_US, HEADER_SPACE_US);
   encode_bit_(dst, true);  // start bit
 
-  for (uint8_t idx = 0; idx < PDPioneerData::DATA_LEN; idx++) {
+  for (uint8_t idx = 0; idx < PDPioneerData::FRAME_SIZE; idx++) {
     for (uint8_t mask = 1; mask; mask <<= 1)
       encode_bit_(dst, (src[idx] & mask) != 0);
   }
@@ -52,7 +52,7 @@ static bool decode_frame_(RemoteReceiveData &src, PDPioneerData &dst) {
   if (!decode_bit_(src, &bit) || !bit)
     return false;
 
-  for (uint8_t idx = 0; idx < PDPioneerData::DATA_LEN; idx++) {
+  for (uint8_t idx = 0; idx < PDPioneerData::FRAME_SIZE; idx++) {
     uint8_t data = 0;
     for (uint8_t mask = 1; mask; mask <<= 1) {
       if (!decode_bit_(src, &bit))
